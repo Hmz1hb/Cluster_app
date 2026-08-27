@@ -7,7 +7,7 @@
 //
 // Required environment variables (set on the Lambda function config, or
 // via `amplify` / SAM / CDK if you provision it that way):
-//   AWS_REGION, S3_BUCKET, DYNAMODB_TABLE
+//   AWS_REGION, S3_BUCKET, MONGODB_URI
 //   ALLOWED_ORIGIN, COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID
 //
 // No AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY here — the function should
@@ -20,14 +20,11 @@
 
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+const { getCollection } = require('../lib/mongo');
 const { randomUUID } = require('crypto');
 const { verifyAuthHeader } = require('../lib/verifyCognitoToken');
 
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-1' });
-const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-1' });
-const dynamo = DynamoDBDocumentClient.from(dynamoClient);
 
 function corsHeaders() {
   return {
@@ -68,8 +65,9 @@ async function uploadToS3(dataUrl, keyName) {
   return getSignedUrl(s3, getCommand, { expiresIn: 60 * 60 * 24 * 7 });
 }
 
-async function saveToDynamo(item) {
-  await dynamo.send(new PutCommand({ TableName: process.env.DYNAMODB_TABLE, Item: item }));
+async function saveToMongo(doc) {
+  const profiles = await getCollection();
+  await profiles.insertOne(doc);
 }
 
 // event: API Gateway HTTP API (payload format 2.0) Lambda proxy event.
@@ -104,7 +102,7 @@ exports.handler = async (event) => {
 
     const savedAt = new Date().toISOString();
 
-    await saveToDynamo({
+    await saveToMongo({
       id: randomUUID(),
       userId: claims.sub,
       savedAt,

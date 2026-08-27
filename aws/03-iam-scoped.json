@@ -26,6 +26,19 @@
       ]
     },
     {
+      "Sid": "ProjectInstanceProfiles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:GetInstanceProfile",
+        "iam:TagInstanceProfile"
+      ],
+      "Resource": "arn:aws:iam::174171641416:instance-profile/ClusterApp*"
+    },
+    {
       "Sid": "ManageProjectCustomerPolicies",
       "Effect": "Allow",
       "Action": [
@@ -58,7 +71,9 @@
             "ecs.amazonaws.com",
             "application-autoscaling.amazonaws.com",
             "lambda.amazonaws.com",
-            "events.amazonaws.com"
+            "events.amazonaws.com",
+            "ec2.amazonaws.com",
+            "dlm.amazonaws.com"
           ]
         }
       }
