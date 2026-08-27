@@ -15,7 +15,6 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
@@ -28,4 +27,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# ECS injects its own HOSTNAME env var into every container, which overrides
+# any ENV set here. Next's standalone server binds to $HOSTNAME, so under ECS
+# it would bind only to the task's ENI address: the ALB could reach it but
+# 127.0.0.1 inside the container could not, failing the container health check.
+# Setting it here, at exec time, is the one place ECS cannot override.
+CMD ["sh", "-c", "exec env HOSTNAME=0.0.0.0 node server.js"]

@@ -22,10 +22,10 @@
         { "name": "DYNAMODB_TABLE", "value": "ProfileEntries" },
         { "name": "COGNITO_USER_POOL_ID", "value": "us-west-1_9JyaVN2bh" },
         { "name": "COGNITO_CLIENT_ID", "value": "1755e0ikj26gudpt4l1v10ag7k" },
-        { "name": "ALLOWED_ORIGIN", "value": "REPLACE_WITH_ALB_OR_DOMAIN_URL" }
+        { "name": "ALLOWED_ORIGIN", "value": "http://cluster-app-alb-1840480898.us-west-1.elb.amazonaws.com" }
       ],
       "healthCheck": {
-        "command": ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"],
+        "command": ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"],
         "interval": 30,
         "timeout": 5,
         "retries": 3,
