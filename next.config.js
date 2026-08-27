@@ -14,6 +14,13 @@ const nextConfig = {
     // so the build is identical here and inside the container.
     root: __dirname,
   },
+
+  // The frontend is a static file in public/, so Next serves it at
+  // /index.html and there is no page route at "/" — a visitor hitting the
+  // bare domain would get a 404. Map the root to it explicitly.
+  async rewrites() {
+    return [{ source: '/', destination: '/index.html' }];
+  },
 };
 
 module.exports = nextConfig;
