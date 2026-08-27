@@ -2,7 +2,6 @@
   "name": "profile-card-api",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -23,6 +22,8 @@
   "devDependencies": {
     "@aws-amplify/backend": "^1.14.0",
     "@aws-amplify/backend-cli": "^1.4.0",
-    "typescript": "^5.0.0"
+    "@types/node": "26.4.0",
+    "@types/react": "19.2.18",
+    "typescript": "5.9.3"
   }
 }

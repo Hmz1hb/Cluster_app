@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.github
+amplify
+aws
+ecs
+*.md
+.env*
+env_local.example
+tsconfig.json
+Dockerfile
+.dockerignore

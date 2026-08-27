@@ -1,0 +1,134 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EcrRegistryWide",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:DescribeRegistry",
+        "ecr:CreateRepository",
+        "ecr:DescribeRepositories",
+        "ecr:GetRegistryPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcrProjectRepos",
+      "Effect": "Allow",
+      "Action": "ecr:*",
+      "Resource": [
+        "arn:aws:ecr:*:174171641416:repository/cluster-app*",
+        "arn:aws:ecr:*:174171641416:repository/profile-card*"
+      ]
+    },
+    {
+      "Sid": "EcsProjectResources",
+      "Effect": "Allow",
+      "Action": "ecs:*",
+      "Resource": [
+        "arn:aws:ecs:*:174171641416:cluster/cluster-app*",
+        "arn:aws:ecs:*:174171641416:service/cluster-app*/*",
+        "arn:aws:ecs:*:174171641416:task/cluster-app*/*",
+        "arn:aws:ecs:*:174171641416:task-definition/cluster-app*:*",
+        "arn:aws:ecs:*:174171641416:container-instance/cluster-app*/*"
+      ]
+    },
+    {
+      "Sid": "EcsAccountWideCalls",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:CreateCluster",
+        "ecs:RegisterTaskDefinition",
+        "ecs:DeregisterTaskDefinition",
+        "ecs:DescribeTaskDefinition",
+        "ecs:ListTaskDefinitions",
+        "ecs:ListTaskDefinitionFamilies",
+        "ecs:ListClusters",
+        "ecs:ListServices",
+        "ecs:ListTasks",
+        "ecs:ListAccountSettings",
+        "ecs:TagResource",
+        "ecs:UntagResource",
+        "ecs:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "LoadBalancing",
+      "Effect": "Allow",
+      "Action": "elasticloadbalancing:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AutoScalingForEcsServices",
+      "Effect": "Allow",
+      "Action": [
+        "application-autoscaling:*",
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:DescribeAlarms"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Ec2ReadEverything",
+      "Effect": "Allow",
+      "Action": "ec2:Describe*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "Ec2NetworkingWrite",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVpc",
+        "ec2:CreateSubnet",
+        "ec2:CreateRouteTable",
+        "ec2:CreateRoute",
+        "ec2:CreateInternetGateway",
+        "ec2:AttachInternetGateway",
+        "ec2:CreateNatGateway",
+        "ec2:AllocateAddress",
+        "ec2:ReleaseAddress",
+        "ec2:AssociateRouteTable",
+        "ec2:DisassociateRouteTable",
+        "ec2:ModifySubnetAttribute",
+        "ec2:ModifyVpcAttribute",
+        "ec2:CreateSecurityGroup",
+        "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:CreateNetworkInterface",
+        "ec2:DeleteNetworkInterface",
+        "ec2:CreateTags",
+        "ec2:DeleteTags",
+        "ec2:DeleteSubnet",
+        "ec2:DeleteRouteTable",
+        "ec2:DeleteRoute",
+        "ec2:DetachInternetGateway",
+        "ec2:DeleteInternetGateway",
+        "ec2:DeleteNatGateway",
+        "ec2:DeleteVpc"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyEc2ComputeAndSpend",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:RunInstances",
+        "ec2:StartInstances",
+        "ec2:PurchaseReservedInstancesOffering",
+        "ec2:PurchaseCapacityBlock",
+        "ec2:CreateCapacityReservation",
+        "ec2:AcceptReservedInstancesExchangeQuote",
+        "ec2:CreateVpcPeeringConnection",
+        "ec2:AcceptVpcPeeringConnection",
+        "ec2:CreateVpcEndpointServiceConfiguration"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ProjectBuckets",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::cluster-app-*",
+        "arn:aws:s3:::cluster-app-*/*",
+        "arn:aws:s3:::profile-card-*",
+        "arn:aws:s3:::profile-card-*/*"
+      ]
+    },
+    {
+      "Sid": "BucketDiscoveryAndCreate",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation",
+        "s3:CreateBucket"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ProjectTables",
+      "Effect": "Allow",
+      "Action": "dynamodb:*",
+      "Resource": [
+        "arn:aws:dynamodb:*:174171641416:table/ProfileEntries",
+        "arn:aws:dynamodb:*:174171641416:table/ProfileEntries/*",
+        "arn:aws:dynamodb:*:174171641416:table/ClusterApp*",
+        "arn:aws:dynamodb:*:174171641416:table/ClusterApp*/*"
+      ]
+    },
+    {
+      "Sid": "TableDiscoveryAndCreate",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:ListTables",
+        "dynamodb:CreateTable",
+        "dynamodb:DescribeLimits"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CognitoUserPools",
+      "Effect": "Allow",
+      "Action": "cognito-idp:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ProjectSecrets",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:RestoreSecret",
+        "secretsmanager:TagResource"
+      ],
+      "Resource": "arn:aws:secretsmanager:*:174171641416:secret:cluster-app/*"
+    },
+    {
+      "Sid": "SecretAndParameterDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:ListSecrets",
+        "ssm:DescribeParameters"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ProjectParameters",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath",
+        "ssm:PutParameter",
+        "ssm:DeleteParameter",
+        "ssm:DeleteParameters",
+        "ssm:AddTagsToResource",
+        "ssm:LabelParameterVersion"
+      ],
+      "Resource": "arn:aws:ssm:*:174171641416:parameter/cluster-app/*"
+    },
+    {
+      "Sid": "LogsAndMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "logs:*",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:PutDashboard",
+        "cloudwatch:GetDashboard",
+        "cloudwatch:DeleteDashboards",
+        "cloudwatch:ListDashboards"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Certificates",
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:DescribeCertificate",
+        "acm:ListCertificates",
+        "acm:ListTagsForCertificate",
+        "acm:AddTagsToCertificate",
+        "acm:DeleteCertificate",
+        "acm:GetCertificate",
+        "acm:RenewCertificate"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Dns",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets",
+        "route53:ListResourceRecordSets",
+        "route53:GetHostedZone",
+        "route53:ListHostedZones",
+        "route53:ListHostedZonesByName",
+        "route53:GetChange",
+        "route53:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyHostedZoneAndDomainChanges",
+      "Effect": "Deny",
+      "Action": [
+        "route53:DeleteHostedZone",
+        "route53:CreateHostedZone",
+        "route53domains:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IdentityLookups",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity",
+        "tag:GetResources",
+        "servicequotas:GetServiceQuota"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
