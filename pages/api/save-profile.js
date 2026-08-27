@@ -7,15 +7,15 @@
 //   - Photos (cover / avatar, sent as base64 data URLs)      -> S3
 //
 // Required environment variables — set these in .env.local (gitignored)
-// or in the Amplify Console -> App settings -> Environment variables.
+// or in the ECS task definition (see ecs/task-definition.json).
 // NEVER commit real values for these; see env_local.example for the
 // placeholder file that belongs in the repo:
 //   AWS_REGION, S3_BUCKET, MONGODB_URI
 //   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY  (omit both if deploying on AWS
-//     with an IAM role attached — Lambda/Amplify/EC2 — the SDK will pick up
+//     with an IAM role attached — ECS/Lambda/EC2 — the SDK will pick up
 //     the role's credentials automatically)
 //   ALLOWED_ORIGIN            (the origin your static index.html is served from)
-//   COGNITO_USER_POOL_ID      (from the Cognito console / amplify/auth/resource.ts output)
+//   COGNITO_USER_POOL_ID      (from the Cognito console)
 //   COGNITO_CLIENT_ID         (the App Client id, no secret)
 
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -30,7 +30,7 @@ export const config = {
   },
 };
 
-// Both clients fall back to the ambient IAM role (Lambda, Amplify, EC2,
+// Both clients fall back to the ambient IAM role (ECS, Lambda, EC2,
 // ECS, etc.) when AWS_ACCESS_KEY_ID isn't set — the natural way to run this
 // once it's actually deployed on AWS.
 const awsCreds = process.env.AWS_ACCESS_KEY_ID

@@ -1,10 +1,8 @@
 name: CI
 
-# Runs on every push/PR. Amplify Hosting deploys the app itself once you
-# connect this GitHub repo in the Amplify Console (Hosting -> "Connect
-# repository") — that's a separate, automatic build/deploy pipeline. This
-# workflow is just a pre-merge sanity check: it doesn't deploy anything or
-# need any AWS credentials, so there are no secrets to configure here.
+# Pre-merge sanity check. Deployment is a separate path (Docker image ->
+# ECR -> ECS/Fargate, see ecs/task-definition.json), so this workflow needs
+# no AWS credentials and there are no secrets to configure here.
 on:
   push:
     branches: [main]
@@ -19,10 +17,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
-      - run: npm install
+      - run: npm ci
+
+      # Fails the build if a dependency picks up a new high/critical
+      # advisory. Drop the --audit-level or this step if upstream noise
+      # makes it too disruptive.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
 
       - name: Run Lambda handler unit tests
         run: npm run test:lambda

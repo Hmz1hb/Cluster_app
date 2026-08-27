@@ -1,17 +1,16 @@
 # syntax=docker/dockerfile:1
 
-# NOTE: `npm ci` is intentionally avoided. @aws-amplify/backend-cli pulls
-# platform-specific binaries (cdk-from-cfn) that npm cannot represent in a
-# lock file `npm ci` will accept. Those are devDependencies the image never
-# needs, so we install production deps only.
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+# Production deps only: the image never needs typescript/@types, and
+# tsconfig.json is excluded via .dockerignore so `next build` treats the
+# project as plain JS and does not ask for the TypeScript toolchain.
+RUN npm ci --omit=dev --no-audit --no-fund
 COPY . .
 RUN npm run build
 
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

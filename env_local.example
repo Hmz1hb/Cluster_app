@@ -1,5 +1,5 @@
 # ── AWS ──────────────────────────────────────────────────────────────────
-# If deploying on AWS itself (Lambda, Amplify Hosting, EC2, ECS) with an
+# If deploying on AWS itself (ECS, Lambda, EC2) with an
 # IAM role attached, omit AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY entirely
 # — the SDK picks up the role's credentials automatically. Only set them
 # for local dev against a real IAM *user* (never commit real values here —
@@ -22,12 +22,11 @@ MONGODB_COLLECTION=profiles
 
 # ── CORS ────────────────────────────────────────────────────────────────
 # The exact origin your static index.html/app.js is served from (e.g. your
-# S3 static website / CloudFront / Amplify Hosting URL). Must be an exact
+# S3 static website / CloudFront / the ALB DNS name). Must be an exact
 # origin, not '*', now that requests carry an Authorization header.
 ALLOWED_ORIGIN=http://localhost:8080
 
 # ── Cognito ─────────────────────────────────────────────────────────────
-# From the Cognito console, or printed by `npx ampx sandbox` if you used
-# amplify/auth/resource.ts.
+# From the Cognito console.
 COGNITO_USER_POOL_ID=us-west-1_REPLACE_ME
 COGNITO_CLIENT_ID=REPLACE_WITH_APP_CLIENT_ID

@@ -17,13 +17,12 @@
     "allowJs": true,
     "noEmit": true,
     "incremental": true,
-    "jsx": "preserve"
+    "jsx": "react-jsx"
   },
   "include": [
     "**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "amplify"
+    "node_modules"
   ]
 }

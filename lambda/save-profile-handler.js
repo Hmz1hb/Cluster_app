@@ -2,11 +2,11 @@
 //
 // Standalone Lambda version of pages/api/save-profile.js, for deploying
 // behind Amazon API Gateway (HTTP API, Lambda proxy integration) instead
-// of / in addition to Amplify Hosting's Next.js API routes. Same request
+// of / in addition to the Next.js API route on ECS/Fargate. Same request
 // shape as the Next.js route.
 //
 // Required environment variables (set on the Lambda function config, or
-// via `amplify` / SAM / CDK if you provision it that way):
+// via SAM / CDK if you provision it that way):
 //   AWS_REGION, S3_BUCKET, MONGODB_URI
 //   ALLOWED_ORIGIN, COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID
 //
