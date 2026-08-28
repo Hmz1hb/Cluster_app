@@ -87,3 +87,70 @@ user creates may do, then add a condition to `ManageProjectRolesOnly` in
 `03-iam-scoped.json` requiring `iam:PermissionsBoundary` to equal its ARN.
 That makes role-based escalation structurally impossible instead of
 merely denied case-by-case.
+
+---
+
+# GitHub Actions deploy role (CI/CD)
+
+`04-github-oidc-deploy.json` → policy `ClusterAppGitHubDeploy`, attached to
+role **`ClusterAppGitHubDeployRole`**. This is what
+`.github/workflows/deploy.yml` assumes to ship a release.
+
+**There is no access key.** The role is assumed through GitHub's OIDC
+identity provider, so GitHub holds no AWS credential — nothing to store as a
+repository secret, nothing to rotate, nothing to leak. The trust policy
+accepts a token only when both of these hold:
+
+- `aud` is `sts.amazonaws.com`, and
+- `sub` is `repo:cristian-gu/Cluster_app:ref:refs/heads/main`
+  or `repo:cristian-gu/Cluster_app:environment:production`
+
+A fork, a pull request, a different branch, or another repository entirely
+cannot assume it. The second `sub` is pre-authorised so that adding a
+GitHub **Environment** named `production` (for a manual approval gate) works
+without touching IAM again.
+
+## What the role may do
+
+| | |
+|---|---|
+| ECR | push/pull **only** `cluster-app`; `GetAuthorizationToken` (this action has no resource-level form, so it is granted on `*`) |
+| ECS | register a task definition, and update **only** `service/cluster-app/cluster-app`; read tasks in that cluster to wait out the rollout |
+| IAM | `PassRole` on `ClusterAppTaskRole` and `ClusterAppTaskExecutionRole`, and only to `ecs-tasks.amazonaws.com` |
+
+`ecs:RegisterTaskDefinition` and `ecs:DescribeTaskDefinition` have no
+resource-level permissions in IAM and must be granted on `*`. The `PassRole`
+statement is the real constraint: a task definition is only useful if it can
+carry a role, and those are the only two roles this identity can attach.
+
+An explicit `Deny` blocks `CreateUser`, `CreateAccessKey`,
+`AttachRolePolicy`, `AttachUserPolicy`, `PutRolePolicy`,
+`UpdateAssumeRolePolicy` and `DeleteRolePermissionsBoundary`, so the role
+cannot widen its own permissions. Verified with the policy simulator: every
+action the pipeline performs is `allowed`; `iam:CreateAccessKey` and
+`iam:AttachRolePolicy` are `explicitDeny`; `ec2:TerminateInstances`,
+`s3:DeleteBucket` and `ecs:DeleteCluster` are `implicitDeny`.
+
+## Recreating it from scratch
+
+```bash
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 \
+                    1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+aws iam create-role --role-name ClusterAppGitHubDeployRole \
+  --assume-role-policy-document file://05-github-oidc-trust.json \
+  --max-session-duration 3600
+
+aws iam create-policy --policy-name ClusterAppGitHubDeploy \
+  --policy-document file://04-github-oidc-deploy.json
+
+aws iam attach-role-policy --role-name ClusterAppGitHubDeployRole \
+  --policy-arn arn:aws:iam::174171641416:policy/ClusterAppGitHubDeploy
+```
+
+> The `cluster-app-deploy` IAM **user** documented above is now only needed
+> for operator work from a laptop. Routine deploys go through the OIDC role
+> and need no long-lived key at all.

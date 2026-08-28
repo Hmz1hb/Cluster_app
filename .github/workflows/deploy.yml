@@ -1,0 +1,131 @@
+name: Deploy to ECS
+
+# Push to main -> test -> build image -> push to ECR -> roll out on Fargate.
+#
+# There are NO secrets to configure. The job authenticates to AWS with
+# GitHub's OIDC provider: it exchanges a short-lived GitHub identity token
+# for temporary AWS credentials by assuming ClusterAppGitHubDeployRole. That
+# role's trust policy only accepts tokens minted for this repository's main
+# branch, so nothing outside it can assume it, and there is no access key
+# anywhere in GitHub to leak or rotate.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never let two rollouts race each other onto the same service.
+concurrency:
+  group: deploy-ecs
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-1
+  ECR_REPOSITORY: cluster-app
+  ECS_CLUSTER: cluster-app
+  ECS_SERVICE: cluster-app
+  ECS_CONTAINER: cluster-app
+  TASK_DEFINITION: ecs/task-definition.json
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      - name: Run Lambda handler unit tests
+        run: npm run test:lambda
+
+  deploy:
+    name: Build and deploy
+    needs: test
+    runs-on: ubuntu-latest
+
+    # id-token lets the job request the OIDC token used to assume the AWS
+    # role. contents: read is all the checkout needs -- the job never writes
+    # back to the repository.
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::174171641416:role/ClusterAppGitHubDeployRole
+          role-session-name: github-actions-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: tag
+        run: echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Tagged with the commit SHA so every deployed image is traceable to
+      # exactly one commit, and with :latest as a convenience pointer.
+      # The task definition below pins the SHA, never :latest -- that is what
+      # makes a rollback a matter of redeploying an older revision.
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ecs/task-definition.json in this repo is the source of truth for the
+      # container's env vars, secrets, health check and sizing. Anything
+      # changed by hand in the ECS console is overwritten on the next deploy;
+      # make such changes here instead.
+      - name: Render task definition
+        id: taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.TASK_DEFINITION }}
+          container-name: ${{ env.ECS_CONTAINER }}
+          image: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.sha }}
+
+      # wait-for-service-stability holds the job open until ECS reports the
+      # rollout finished. Combined with the service's deployment circuit
+      # breaker (enable + rollback), a container that fails its health check
+      # is automatically reverted to the previous task definition and this
+      # step fails -- so a red check mark means the old version is still live.
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.taskdef.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://d11cs47teahceh.cloudfront.net/api/health || true)
+            if [ "$code" = "200" ]; then echo "health check OK"; exit 0; fi
+            echo "attempt $i: HTTP $code"; sleep 10
+          done
+          echo "::error::/api/health did not return 200 after the rollout"
+          exit 1

@@ -73,7 +73,8 @@ lambda/test-save-profile-handler.js                     ← Lambda unit test
 Dockerfile, .dockerignore                               ← container build
 ecs/task-definition.json                                ← Fargate task def
 aws/*.json, aws/README.md                               ← scoped IAM policies
-.github/workflows/ci.yml                                ← tests on push
+.github/workflows/ci.yml                                ← tests on pull requests
+.github/workflows/deploy.yml                            ← CI/CD: main → Fargate
 env_local.example                                       ← copy to .env.local
 ```
 
@@ -144,6 +145,10 @@ lifecycle policy with 7-day retention.
 
 ## 4. Deploy: container → ECR → ECS Fargate
 
+Normally you do **not** run any of this by hand — pushing to `main` deploys
+the app automatically (see §5). The commands below are the break-glass path
+for when you need to ship without GitHub.
+
 ```bash
 REPO=<account-id>.dkr.ecr.us-west-1.amazonaws.com/cluster-app
 
@@ -176,7 +181,66 @@ aws ecs register-task-definition --cli-input-json file://ecs/task-definition.jso
 - The container health check must use `127.0.0.1`, not `localhost`, which
   resolves to IPv6 `::1` while Next listens on IPv4.
 
-## 5. TLS / CloudFront
+## 5. CI/CD: push to main → live
+
+`.github/workflows/deploy.yml` runs on every push to `main`:
+
+```
+test ──► build image ──► push to ECR ──► render task def ──► roll out ──► smoke test
+```
+
+1. **test** — `npm ci`, `npm audit --audit-level=high`, `npm run test:lambda`.
+   A failure here stops the pipeline before anything is built.
+2. **build** — Docker Buildx, `linux/amd64`, layer cache in GitHub Actions.
+   Tagged both `:<short-sha>` and `:latest`.
+3. **render** — `ecs/task-definition.json` with the image pinned to the
+   **commit SHA**, never `:latest`. That is what makes a rollback simply
+   "redeploy an older revision".
+4. **roll out** — `update-service` and wait for stability.
+5. **smoke test** — polls `https://d11cs47teahceh.cloudfront.net/api/health`
+   until it returns 200.
+
+`.github/workflows/ci.yml` runs the same test job on pull requests, so
+problems surface before merge.
+
+### No secrets in GitHub
+
+The deploy job authenticates with **GitHub OIDC**: it exchanges a short-lived
+GitHub identity token for temporary AWS credentials by assuming
+`ClusterAppGitHubDeployRole`. There is no access key stored in the repository,
+nothing to rotate, and nothing to leak if the repo stays public. The role's
+trust policy only accepts tokens minted for `main` in
+`cristian-gu/Cluster_app`; see `aws/README.md` for the full grant.
+
+### Safety net
+
+The ECS service runs with the **deployment circuit breaker enabled and
+`rollback: true`**. If the new task fails its health check, ECS reverts to the
+previous task definition on its own and the workflow goes red — so a failed
+run means the previous version is still serving traffic. `minimumHealthyPercent`
+is 100 and `maximumPercent` 200, so the new task is up and healthy before the
+old one is drained: rollouts are zero-downtime.
+
+`ecs/task-definition.json` is the source of truth for env vars, secrets,
+health check and sizing. **Anything edited by hand in the ECS console is
+overwritten on the next deploy** — change it here instead.
+
+### Rolling back
+
+```bash
+# list recent revisions
+aws ecs list-task-definitions --family-prefix cluster-app --sort DESC
+
+# redeploy a known-good one
+aws ecs update-service --cluster cluster-app --service cluster-app \
+  --task-definition cluster-app:5
+```
+
+Or revert the commit and push — the pipeline treats that like any other change.
+ECR keeps one image per deployed commit; only untagged images are expired,
+after 14 days.
+
+## 6. TLS / CloudFront
 
 The app is served over HTTPS by a CloudFront distribution using CloudFront's
 own `*.cloudfront.net` certificate. **This is a stand-in.** The intended
@@ -219,7 +283,7 @@ certificate on the ALB and switch the origin protocol policy to `https-only`
 and point Route 53 A-alias records at the distribution. The origin, cache
 behaviour and security group all stay as they are.
 
-## 6. AWS Lambda + API Gateway (alternative)
+## 7. AWS Lambda + API Gateway (alternative)
 
 `lambda/save-profile-handler.js` is a drop-in Lambda version of the API route
 — same env vars, same S3/MongoDB calls, same Cognito check, speaking API

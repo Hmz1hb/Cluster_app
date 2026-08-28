@@ -1,11 +1,11 @@
 name: CI
 
-# Pre-merge sanity check. Deployment is a separate path (Docker image ->
-# ECR -> ECS/Fargate, see ecs/task-definition.json), so this workflow needs
-# no AWS credentials and there are no secrets to configure here.
+# Pre-merge sanity check on pull requests. Merging to main hands off to
+# .github/workflows/deploy.yml, which re-runs this same suite before it
+# builds and rolls out, so there is no push trigger here to duplicate it.
+# Neither workflow needs an AWS access key: deploy.yml authenticates with
+# GitHub OIDC. There are no secrets to configure in this repository.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
