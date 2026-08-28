@@ -35,6 +35,11 @@ unauthenticated requests get `401`.
 ## Architecture
 
 ```
+                         https://<id>.cloudfront.net   ← TLS front door
+                                      │
+                                      ▼  (HTTP, origin locked to CloudFront)
+                            Application Load Balancer
+                                      │
 index.html ── config.js (Cognito pool/client IDs, API base URL)
            ── cognito-auth.js (sign in/out, holds tokens in sessionStorage)
            ── app.js (sends Authorization: Bearer <access token> on every save)
@@ -52,7 +57,8 @@ index.html ── config.js (Cognito pool/client IDs, API base URL)
 
 The frontend is served by the same container as the API (`public/` is copied
 into the image), so `apiBaseUrl` in `public/config.js` is `''` — same origin,
-no cross-origin preflight in the deployed setup.
+no cross-origin preflight in the deployed setup. CloudFront fronts the whole
+thing, so that stays true over HTTPS.
 
 ## Repo layout
 
@@ -170,7 +176,50 @@ aws ecs register-task-definition --cli-input-json file://ecs/task-definition.jso
 - The container health check must use `127.0.0.1`, not `localhost`, which
   resolves to IPv6 `::1` while Next listens on IPv4.
 
-## 5. AWS Lambda + API Gateway (alternative)
+## 5. TLS / CloudFront
+
+The app is served over HTTPS by a CloudFront distribution using CloudFront's
+own `*.cloudfront.net` certificate. **This is a stand-in.** The intended
+address is `clustercorp.org`, but that domain sits on registrar `clientHold`
+(the registrant never completed ICANN email verification), so it does not
+resolve at all and ACM cannot validate a certificate for it. CloudFront's
+default certificate needs no domain, so it gets us real, browser-trusted TLS
+in the meantime.
+
+```
+distribution : E19CV9I36QCHPE
+url          : https://d11cs47teahceh.cloudfront.net
+origin       : the ALB, HTTP on port 80
+viewer       : redirect-to-https, TLSv1.2_2021 minimum
+cache policy : Managed-CachingDisabled
+origin req   : Managed-AllViewer  (forwards Authorization — auth breaks without it)
+price class  : PriceClass_100
+```
+
+Caching is disabled deliberately: the origin sends `Cache-Control: public,
+max-age=0` on the static files anyway, so there was nothing to gain and a
+stale `config.js` is a real hazard. Turn caching on for static paths later if
+traffic justifies it, and remember to invalidate on deploy:
+
+```bash
+aws cloudfront create-invalidation --distribution-id E19CV9I36QCHPE --paths '/*'
+```
+
+**The ALB is not publicly reachable.** Its security group accepts port 80 only
+from the `com.amazonaws.global.cloudfront.origin-facing` managed prefix list
+(`pl-4ea04527`), so HTTPS via CloudFront is the only way in. Hitting the ALB
+hostname directly times out — that is intentional, not a fault.
+
+The CloudFront→ALB hop is plain HTTP inside AWS. To close that too, put an ACM
+certificate on the ALB and switch the origin protocol policy to `https-only`
+— which needs a validated domain, so it is blocked on the same `clientHold`.
+
+**When `clustercorp.org` clears:** request/validate the ACM cert, add
+`clustercorp.org` + `www` as aliases on this distribution, attach the cert,
+and point Route 53 A-alias records at the distribution. The origin, cache
+behaviour and security group all stay as they are.
+
+## 6. AWS Lambda + API Gateway (alternative)
 
 `lambda/save-profile-handler.js` is a drop-in Lambda version of the API route
 — same env vars, same S3/MongoDB calls, same Cognito check, speaking API

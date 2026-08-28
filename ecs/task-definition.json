@@ -42,7 +42,7 @@
         },
         {
           "name": "ALLOWED_ORIGIN",
-          "value": "http://cluster-app-alb-1840480898.us-west-1.elb.amazonaws.com"
+          "value": "https://d11cs47teahceh.cloudfront.net"
         },
         {
           "name": "MONGODB_DB",
