@@ -13,6 +13,9 @@
 const assert = require('assert');
 const Module = require('module');
 
+// Documents the handler tried to persist, captured by the mongo mock below.
+const insertedDocs = [];
+
 // ── Mock lib/verifyCognitoToken so no real Cognito call happens ──────────
 const originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
@@ -36,13 +39,17 @@ Module._load = function (request, parent, isMain) {
   if (request === '@aws-sdk/s3-request-presigner') {
     return { getSignedUrl: async () => 'https://example-bucket.s3.amazonaws.com/mock-presigned-url' };
   }
-  if (request === '@aws-sdk/client-dynamodb') {
-    return { DynamoDBClient: class {} };
-  }
-  if (request === '@aws-sdk/lib-dynamodb') {
+  if (request.endsWith('lib/mongo')) {
     return {
-      DynamoDBDocumentClient: { from: () => ({ send: () => Promise.resolve({}) }) },
-      PutCommand: class {},
+      // Captures what the handler would have written so the tests can assert
+      // on the document shape without a running MongoDB.
+      getCollection: async () => ({
+        insertOne: async (doc) => {
+          insertedDocs.push(doc);
+          return { acknowledged: true, insertedId: 'mock-id' };
+        },
+      }),
+      closeClient: async () => {},
     };
   }
   return originalLoad.apply(this, arguments);
@@ -50,7 +57,8 @@ Module._load = function (request, parent, isMain) {
 
 process.env.ALLOWED_ORIGIN = 'http://localhost:8080';
 process.env.S3_BUCKET = 'test-bucket';
-process.env.DYNAMODB_TABLE = 'TestProfileEntries';
+process.env.MONGODB_URI = 'mongodb://test/clusterapp';
+process.env.MONGODB_DB = 'clusterapp';
 
 const { handler } = require('./save-profile-handler');
 Module._load = originalLoad; // restore for anything loaded after this point
@@ -103,7 +111,17 @@ async function run() {
     const parsed = JSON.parse(res.body);
     assert.strictEqual(parsed.ok, true);
     assert.ok(parsed.savedAt);
+
+    // The document actually handed to MongoDB must carry the Cognito subject,
+    // not anything client-supplied — that binding is what stops one user
+    // writing rows attributed to another.
+    const doc = insertedDocs[insertedDocs.length - 1];
+    assert.ok(doc, 'handler should have persisted a document');
+    assert.strictEqual(doc.userId, 'test-user-123');
+    assert.ok(doc.id, 'document should carry a generated id');
+    assert.strictEqual(doc.journal, 'First entry');
     console.log('✓ Authenticated POST returns 200 with { ok, savedAt, coverUrl, avatarUrl }');
+    console.log('✓ Persisted document carries the Cognito sub as userId');
   }
 
   // 5. Wrong method -> 405

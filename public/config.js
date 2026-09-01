@@ -24,8 +24,9 @@ window.APP_CONFIG = {
   // Cognito App Client ID (no secret), e.g. '1h5p3q...'
   userPoolClientId: '1755e0ikj26gudpt4l1v10ag7k',
 
-  // Base URL of the save-profile API (Next.js on Amplify Hosting, or
-  // API Gateway in front of the Lambda in /lambda). Matches API_BASE_URL
-  // in app.js — keep both in sync.
-  apiBaseUrl: 'https://main.d10aam5g1tfkqh.amplifyapp.com',
+  // Base URL of the save-profile API. Empty string = same origin, which is
+  // correct now that the ECS/Fargate container serves both this static
+  // frontend and /api/* behind the same load balancer. Leaving it relative
+  // means a custom domain needs no rebuild.
+  apiBaseUrl: '',
 };

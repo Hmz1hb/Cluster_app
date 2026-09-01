@@ -1,0 +1,82 @@
+{
+  "family": "cluster-app",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::174171641416:role/ClusterAppTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::174171641416:role/ClusterAppTaskRole",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "cluster-app",
+      "image": "174171641416.dkr.ecr.us-west-1.amazonaws.com/cluster-app:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "us-west-1"
+        },
+        {
+          "name": "S3_BUCKET",
+          "value": "profile-card-photos-cluster"
+        },
+        {
+          "name": "COGNITO_USER_POOL_ID",
+          "value": "us-west-1_9JyaVN2bh"
+        },
+        {
+          "name": "COGNITO_CLIENT_ID",
+          "value": "1755e0ikj26gudpt4l1v10ag7k"
+        },
+        {
+          "name": "ALLOWED_ORIGIN",
+          "value": "https://clustercorp.org"
+        },
+        {
+          "name": "MONGODB_DB",
+          "value": "clusterapp"
+        },
+        {
+          "name": "MONGODB_COLLECTION",
+          "value": "profiles"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:3000/api/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/cluster-app",
+          "awslogs-region": "us-west-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "secrets": [
+        {
+          "name": "MONGODB_URI",
+          "valueFrom": "arn:aws:ssm:us-west-1:174171641416:parameter/cluster-app/mongodb-uri"
+        }
+      ]
+    }
+  ]
+}

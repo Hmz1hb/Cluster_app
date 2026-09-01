@@ -1,0 +1,176 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageProjectRolesOnly",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:UpdateRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:TagRole",
+        "iam:UntagRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::174171641416:role/ClusterApp*",
+        "arn:aws:iam::174171641416:role/cluster-app-*"
+      ]
+    },
+    {
+      "Sid": "ProjectInstanceProfiles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:GetInstanceProfile",
+        "iam:TagInstanceProfile"
+      ],
+      "Resource": "arn:aws:iam::174171641416:instance-profile/ClusterApp*"
+    },
+    {
+      "Sid": "ManageProjectCustomerPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreatePolicy",
+        "iam:DeletePolicy",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyVersions"
+      ],
+      "Resource": [
+        "arn:aws:iam::174171641416:policy/ClusterApp*",
+        "arn:aws:iam::174171641416:policy/cluster-app-*"
+      ]
+    },
+    {
+      "Sid": "PassProjectRolesToAwsServicesOnly",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::174171641416:role/ClusterApp*",
+        "arn:aws:iam::174171641416:role/cluster-app-*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": [
+            "ecs-tasks.amazonaws.com",
+            "ecs.amazonaws.com",
+            "application-autoscaling.amazonaws.com",
+            "lambda.amazonaws.com",
+            "events.amazonaws.com",
+            "ec2.amazonaws.com",
+            "dlm.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "ServiceLinkedRolesForThisStack",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "ecs.amazonaws.com",
+            "elasticloadbalancing.amazonaws.com",
+            "application-autoscaling.amazonaws.com",
+            "ecs.application-autoscaling.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "ReadOnlyIamForDebugging",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:ListRoles",
+        "iam:ListPolicies",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfiles",
+        "iam:GetInstanceProfile",
+        "iam:SimulatePrincipalPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyAllIdentityManagement",
+      "Effect": "Deny",
+      "Action": [
+        "iam:*User*",
+        "iam:*Group*",
+        "iam:*AccessKey*",
+        "iam:*LoginProfile*",
+        "iam:*MFADevice*",
+        "iam:*SAMLProvider*",
+        "iam:*OpenIDConnectProvider*",
+        "iam:*AccountAlias*",
+        "iam:*AccountPasswordPolicy*",
+        "iam:CreateAccountAlias",
+        "iam:UpdateAssumeRolePolicy"
+      ],
+      "NotResource": [
+        "arn:aws:iam::174171641416:role/ClusterApp*",
+        "arn:aws:iam::174171641416:role/cluster-app-*"
+      ]
+    },
+    {
+      "Sid": "DenyAttachingPrivilegedPolicies",
+      "Effect": "Deny",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:AttachUserPolicy",
+        "iam:AttachGroupPolicy"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": [
+            "arn:aws:iam::aws:policy/AdministratorAccess",
+            "arn:aws:iam::aws:policy/PowerUserAccess",
+            "arn:aws:iam::aws:policy/IAMFullAccess"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "DenyAccountLevelControl",
+      "Effect": "Deny",
+      "Action": [
+        "organizations:*",
+        "account:Put*",
+        "account:Delete*",
+        "account:Disable*",
+        "billing:*",
+        "aws-portal:*",
+        "budgets:Modify*",
+        "ce:Update*",
+        "cloudtrail:Delete*",
+        "cloudtrail:Stop*",
+        "cloudtrail:Update*",
+        "guardduty:Delete*",
+        "guardduty:Disassociate*",
+        "config:Delete*",
+        "config:Stop*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
