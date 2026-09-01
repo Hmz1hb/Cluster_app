@@ -102,13 +102,41 @@ repository secret, nothing to rotate, nothing to leak. The trust policy
 accepts a token only when both of these hold:
 
 - `aud` is `sts.amazonaws.com`, and
-- `sub` is `repo:cristian-gu/Cluster_app:ref:refs/heads/main`
-  or `repo:cristian-gu/Cluster_app:environment:production`
+- `sub` is the repository on `refs/heads/main`, or the repository with a
+  `production` environment
 
 A fork, a pull request, a different branch, or another repository entirely
-cannot assume it. The second `sub` is pre-authorised so that adding a
+cannot assume it. The `environment` form is pre-authorised so that adding a
 GitHub **Environment** named `production` (for a manual approval gate) works
 without touching IAM again.
+
+**Both spellings of `sub` are listed, and both are needed.** GitHub can issue
+the subject in two shapes:
+
+```
+repo:cristian-gu/Cluster_app:ref:refs/heads/main
+repo:cristian-gu@134232784/Cluster_app@1332557842:ref:refs/heads/main
+```
+
+The second is GitHub's *immutable* subject: it carries the numeric owner ID
+and repository ID, so the claim keeps identifying the same repository even if
+the account or the repository is renamed. This repository issues the immutable
+form, which is why it is listed first. A trust policy carrying only the plain
+form fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity` —
+an error that gives no hint about which claim was rejected. If you ever hit
+it, read the real `sub` out of CloudTrail rather than guessing:
+
+```bash
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
+  --region us-west-1 --max-results 1 \
+  --query 'Events[0].CloudTrailEvent' --output text
+```
+
+The rejected subject appears as `userIdentity.userName`.
+
+Pinning to the numeric IDs is the stronger of the two: a renamed or deleted
+and re-created repository cannot inherit the trust by taking the old name.
 
 ## What the role may do
 

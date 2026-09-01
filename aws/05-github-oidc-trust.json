@@ -12,6 +12,8 @@
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
           "token.actions.githubusercontent.com:sub": [
+            "repo:cristian-gu@134232784/Cluster_app@1332557842:ref:refs/heads/main",
+            "repo:cristian-gu@134232784/Cluster_app@1332557842:environment:production",
             "repo:cristian-gu/Cluster_app:ref:refs/heads/main",
             "repo:cristian-gu/Cluster_app:environment:production"
           ]
