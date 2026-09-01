@@ -242,19 +242,26 @@ after 14 days.
 
 ## 6. TLS / CloudFront
 
-The app is served over HTTPS by a CloudFront distribution using CloudFront's
-own `*.cloudfront.net` certificate. **This is a stand-in.** The intended
-address is `clustercorp.org`, but that domain sits on registrar `clientHold`
-(the registrant never completed ICANN email verification), so it does not
-resolve at all and ACM cannot validate a certificate for it. CloudFront's
-default certificate needs no domain, so it gets us real, browser-trusted TLS
-in the meantime.
+The app is served over HTTPS by a CloudFront distribution at
+`https://clustercorp.org`, with `www.clustercorp.org` answering the same way.
+The `*.cloudfront.net` address still works and stays valid — it is the
+distribution's own hostname, not a redirect — so any existing link or bookmark
+keeps resolving.
+
+The domain spent its first weeks on registrar `clientHold` because the ICANN
+registrant verification email was never confirmed. That was completed on
+1 Sep 2026; the registrar lifted the hold, and the custom domain was attached
+the same day.
 
 ```
 distribution : E19CV9I36QCHPE
-url          : https://d11cs47teahceh.cloudfront.net
+url          : https://clustercorp.org
+aliases      : clustercorp.org, www.clustercorp.org
+default host : https://d11cs47teahceh.cloudfront.net  (still serves the same site)
+certificate  : ACM us-east-1 e421fd8d-333d-4dc6-bec5-8dbe50b404ae, DNS-validated
+hosted zone  : Z0091586S3726Y9AMOSM  (A + AAAA alias, apex and www)
 origin       : the ALB, HTTP on port 80
-viewer       : redirect-to-https, TLSv1.2_2021 minimum
+viewer       : redirect-to-https, TLSv1.2_2021 minimum, sni-only
 cache policy : Managed-CachingDisabled
 origin req   : Managed-AllViewer  (forwards Authorization — auth breaks without it)
 price class  : PriceClass_100
@@ -275,13 +282,14 @@ from the `com.amazonaws.global.cloudfront.origin-facing` managed prefix list
 hostname directly times out — that is intentional, not a fault.
 
 The CloudFront→ALB hop is plain HTTP inside AWS. To close that too, put an ACM
-certificate on the ALB and switch the origin protocol policy to `https-only`
-— which needs a validated domain, so it is blocked on the same `clientHold`.
+certificate on the ALB and switch the origin protocol policy to `https-only`.
+Now that the domain validates this is no longer blocked — it is simply not
+done, because the hop runs inside the VPC and the ALB is unreachable from the
+internet.
 
-**When `clustercorp.org` clears:** request/validate the ACM cert, add
-`clustercorp.org` + `www` as aliases on this distribution, attach the cert,
-and point Route 53 A-alias records at the distribution. The origin, cache
-behaviour and security group all stay as they are.
+The certificate is DNS-validated and its validation `CNAME` records stay in
+the hosted zone, so ACM renews it automatically. Deleting those records is
+what would break renewal — leave them in place.
 
 ## 7. AWS Lambda + API Gateway (alternative)
 

@@ -42,7 +42,7 @@
         },
         {
           "name": "ALLOWED_ORIGIN",
-          "value": "https://d11cs47teahceh.cloudfront.net"
+          "value": "https://clustercorp.org"
         },
         {
           "name": "MONGODB_DB",
