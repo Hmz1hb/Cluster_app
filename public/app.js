@@ -1,6 +1,7 @@
 // ─── Server sync (Next.js API route, backed by AWS + Cognito auth) ───────────
 // Points at the /api/save-profile route from the nextjs-api project
-// (S3 for photos, DynamoDB for profile/journal data), guarded by Cognito.
+// (S3 for photos, MongoDB for profile/journal data), guarded by Cognito.
+// POST saves the card; GET reads it back so a refresh doesn't look empty.
 // Base URL now comes from config.js so it's set in one place — update
 // public/config.js's apiBaseUrl, not this file.
 const API_BASE_URL = window.APP_CONFIG.apiBaseUrl;
@@ -9,6 +10,12 @@ const API_BASE_URL = window.APP_CONFIG.apiBaseUrl;
 // so the API route can push them to S3.
 let coverDataUrl  = null;
 let avatarDataUrl = null;
+
+// Whether the form is currently showing what the server holds. A save writes
+// the whole card in one go, so saving from a form that never loaded would
+// overwrite stored data with blanks — these two guard against that.
+let profileLoaded  = false;
+let profileLoading = null;
 
 // Gathers the current profile/photo/journal state and POSTs it to the API.
 // Requires a signed-in Cognito user (see signIn()/signOut() below); if
@@ -20,6 +27,15 @@ async function syncToServer() {
   if (!accessToken) {
     showToast('Sign in to save your profile');
     updateAuthUI();
+    return null;
+  }
+
+  // Wait for a load that is still in flight, then refuse if it never
+  // succeeded. Refusing is the safe side: a refresh fixes it, an overwrite
+  // with an empty form does not.
+  if (!profileLoaded && profileLoading) await profileLoading;
+  if (!profileLoaded) {
+    showToast('Could not load your saved card — refresh before saving');
     return null;
   }
 
@@ -68,6 +84,136 @@ async function syncToServer() {
   }
 }
 
+// Pulls the signed-in user's card back from the server. Nothing is kept in
+// the browser between visits, so without this a refresh leaves the page blank
+// even though the data is safe in the database. Returns true once the form
+// reflects the server — including for a brand-new account with nothing saved.
+function loadProfile() {
+  profileLoaded = false;
+  profileLoading = (async () => {
+    const accessToken = await window.CognitoAuth.ensureFreshToken();
+    if (!accessToken) return false;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/save-profile`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+
+      const data = await res.json();
+      if (data.profile) applyProfile(data.profile);
+
+      profileLoaded = true;
+      return true;
+    } catch (err) {
+      console.warn('loadProfile failed:', err);
+      showToast('Could not load your saved card — refresh to try again');
+      return false;
+    }
+  })();
+  return profileLoading;
+}
+
+// Puts a profile from the server into the form and onto the card face.
+function applyProfile(p) {
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value || '';
+  };
+
+  setValue('input-full_name', p.fullName);
+  setValue('sel-title',       p.title);
+  setValue('sel-ethnicity',   p.ethnicity);
+  setValue('sel-religion',    p.religion);
+  setValue('sel-city',        p.city);
+  setValue('journal-input',   p.journal);
+
+  // A saved address beats the account prefill, and is marked as the user's
+  // own so updateAuthUI() leaves it alone from here on.
+  const emailField = document.getElementById('input-email');
+  if (emailField && p.email) {
+    emailField.value = p.email;
+    delete emailField.dataset.autofilled;
+  }
+
+  const nameEl = document.getElementById('disp-full_name');
+  nameEl.textContent = p.fullName || 'Your Name';
+  nameEl.classList.toggle('empty', !p.fullName);
+
+  setChipValue('disp-email',     p.email);
+  setChipValue('disp-title',     p.title);
+  setChipValue('disp-ethnicity', p.ethnicity);
+  setChipValue('disp-religion',  p.religion);
+  setChipValue('disp-city',      p.city);
+
+  selectedPolitical = p.political || null;
+  document.querySelectorAll('.political-option').forEach((btn) => {
+    btn.classList.toggle('selected', btn.dataset.value === selectedPolitical);
+  });
+
+  // These URLs are signed by the server on each read and expire, so they are
+  // only ever displayed — coverDataUrl/avatarDataUrl stay null, which is what
+  // tells the API on the next save that the stored photos are unchanged.
+  if (p.coverUrl) {
+    const img = document.getElementById('cover-img');
+    img.src = p.coverUrl;
+    img.classList.add('loaded');
+    document.getElementById('cover-hint').style.display = 'none';
+  }
+  if (p.avatarUrl) {
+    const img = document.getElementById('avatar-img');
+    img.src = p.avatarUrl;
+    img.classList.add('loaded');
+    document.getElementById('avatar-placeholder').style.display = 'none';
+  }
+
+  if (p.savedAt) {
+    const when = new Date(p.savedAt);
+    document.getElementById('journal-meta').textContent =
+      `Last saved ${when.toLocaleDateString()} at ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+}
+
+// Wipes the card back to its empty state, so signing out doesn't leave one
+// person's profile on screen for whoever signs in next.
+function clearProfile() {
+  ['input-full_name', 'input-email', 'sel-title', 'sel-ethnicity',
+   'sel-religion', 'sel-city', 'journal-input'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  const emailField = document.getElementById('input-email');
+  if (emailField) delete emailField.dataset.autofilled;
+
+  const nameEl = document.getElementById('disp-full_name');
+  nameEl.textContent = 'Your Name';
+  nameEl.classList.add('empty');
+  ['disp-email', 'disp-title', 'disp-ethnicity', 'disp-religion', 'disp-city']
+    .forEach((id) => setChipValue(id, ''));
+
+  selectedPolitical = null;
+  document.querySelectorAll('.political-option').forEach((btn) => btn.classList.remove('selected'));
+
+  coverDataUrl  = null;
+  avatarDataUrl = null;
+
+  const cover = document.getElementById('cover-img');
+  cover.removeAttribute('src');
+  cover.classList.remove('loaded');
+  document.getElementById('cover-hint').style.display = '';
+
+  const avatar = document.getElementById('avatar-img');
+  avatar.removeAttribute('src');
+  avatar.classList.remove('loaded');
+  document.getElementById('avatar-placeholder').style.display = '';
+
+  document.getElementById('journal-meta').textContent = 'No entries yet';
+
+  profileLoaded  = false;
+  profileLoading = null;
+}
+
 // Cognito's raw errors are long and internal-sounding ("Password did not
 // conform with policy: Password not long enough"), and they overflowed the
 // toast. Turn them into something a person can act on; the original is kept
@@ -110,6 +256,7 @@ async function signIn() {
     showToast('Signed in ✓');
     updateAuthUI();
     goTo(2); //directly to eddit profile panel after sign-in
+    await loadProfile();
   } catch (err) {
     console.warn('Sign-in:', err);
     showToast(authErrorMessage(err));
@@ -147,6 +294,7 @@ async function confirmSignUp() {
     showToast('Signed in ✓');
     updateAuthUI();
     goTo(2); //directly to eddit profile panel after sign-in
+    await loadProfile();
   } catch (err) {
     console.warn('Confirmation:', err);
     showToast(authErrorMessage(err));
@@ -157,6 +305,8 @@ function signOut() {
   // Grab the address before the tokens go, so signing back in is one field.
   const email = window.CognitoAuth.currentEmail();
   window.CognitoAuth.signOut();
+
+  clearProfile();
 
   const field = document.getElementById('auth-email');
   if (field && email) field.value = email;
@@ -348,3 +498,12 @@ async function saveJournal() {
 
   showToast('Journal entry saved ✓');
 }
+
+// ─── Startup ──────────────────────────────────────────────────────────────────
+// Someone arriving with a session already open sees an empty page otherwise —
+// the card lives on the server, not in this browser. Pull it back on load.
+// getAccessToken() rather than isSignedIn() so an expired-but-refreshable
+// session still loads; loadProfile() refreshes the token on its way through.
+window.addEventListener('load', () => {
+  if (window.CognitoAuth.getAccessToken()) loadProfile();
+});

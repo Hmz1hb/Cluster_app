@@ -13,6 +13,19 @@ journal fields to **MongoDB**. Two interchangeable ways to run the API:
 Both paths require a valid **Amazon Cognito** access token on every request;
 unauthenticated requests get `401`.
 
+Each accepts two methods on the same path:
+
+| Method | Does |
+| --- | --- |
+| `POST` | Saves the signed-in user's card. Photos ride along as base64 data URLs and go to S3. |
+| `GET`  | Reads the card back, so the page rehydrates after a refresh. Answers `{ ok: true, profile: null }` for an account that has never saved. |
+
+The document is always keyed by the access token's `sub`, never by anything
+the client sends, so one user can neither read nor overwrite another's row.
+There is exactly **one document per user**, updated in place — saving twice
+edits the same row rather than accumulating duplicates. A save that carries no
+new photo leaves the stored one untouched.
+
 ## Runtime
 
 | | Version |
@@ -50,9 +63,10 @@ index.html ── config.js (Cognito pool/client IDs, API base URL)
       lambda/save-profile-handler.js   (API Gateway + Lambda)
                  │
                  ├── verifies token against Cognito User Pool (aws-jwt-verify)
-                 ├── S3.PutObject          → cover/avatar photos
-                 └── MongoDB insertOne     → profile/journal record (carries
-                                              Cognito `sub` as userId)
+                 ├── S3.PutObject          → cover/avatar photos (the KEY is
+                 │                            stored; URLs are signed per read)
+                 └── MongoDB updateOne     → one profile/journal document per
+                     (upsert on userId)      user, keyed by the Cognito `sub`
 ```
 
 The frontend is served by the same container as the API (`public/` is copied
