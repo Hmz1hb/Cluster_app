@@ -19,10 +19,10 @@ window.APP_CONFIG = {
   region: 'us-west-1',
 
   // Cognito User Pool ID, e.g. 'us-west-1_AbCdEfGhI'
-  userPoolId: 'us-west-1_9JyaVN2bh',
+  userPoolId: 'us-west-1_IKiKKgKrq',
 
   // Cognito App Client ID (no secret), e.g. '1h5p3q...'
-  userPoolClientId: '1755e0ikj26gudpt4l1v10ag7k',
+  userPoolClientId: '508fa82r3ttv3bgh3gtomt1ubv',
 
   // Base URL of the save-profile API. Empty string = same origin, which is
   // correct now that the ECS/Fargate container serves both this static

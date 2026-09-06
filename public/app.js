@@ -16,8 +16,10 @@ let avatarDataUrl = null;
 // call instead of sending an unauthenticated request that the API will
 // reject with 401 anyway.
 async function syncToServer() {
-  if (!window.CognitoAuth.isSignedIn()) {
-    showToast('Sign in to save changes');
+  const accessToken = await window.CognitoAuth.ensureFreshToken();
+  if (!accessToken) {
+    showToast('Sign in to save your profile');
+    updateAuthUI();
     return null;
   }
 
@@ -39,7 +41,6 @@ async function syncToServer() {
   };
 
   try {
-    let accessToken = window.CognitoAuth.getAccessToken();
 
     const doFetch = (token) => fetch(`${API_BASE_URL}/api/save-profile`, {
       method: 'POST',
@@ -67,20 +68,61 @@ async function syncToServer() {
   }
 }
 
-// ─── Auth (sign in / sign up / sign out) ─────────────────────────────────────
-// Wire these to whatever login form/panel you add to index.html, e.g.:
-//   <input id="auth-email"><input id="auth-password" type="password">
-//   <button onclick="signIn()">Sign in</button>
-//   <button onclick="signOut()">Sign out</button>
+function authFields() {
+  return {
+    email: document.getElementById('auth-email').value.trim(),
+    password: document.getElementById('auth-password').value.trim(),
+  };
+}
+
 async function signIn() {
-  const email    = document.getElementById('auth-email').value;
-  const password = document.getElementById('auth-password').value;
+  const { email, password } = authFields();
+  if (!email || !password) {
+    showToast('Enter email & password');
+    return;
+  }
   try {
     await window.CognitoAuth.signIn(email, password);
     showToast('Signed in ✓');
     updateAuthUI();
+    goTo(2); //directly to eddit profile panel after sign-in
   } catch (err) {
     showToast(err.message || 'Sign-in failed');
+  }
+}
+
+async function signUp() {
+  const { email, password } = authFields();
+  if (!email || !password) {
+    showToast('Enter email & password');
+    return;
+  }
+
+  try{
+    await window.CognitoAuth.signUp(email, password);
+    document.getElementById('auth-confirmation-step').style.display = '';
+    showToast('Confirmation code sent to email');
+  } catch (err) {
+    showToast(err.message || 'Sign-up failed');
+  }
+}
+
+async function confirmSignUp() {
+  const { email, password } = authFields();
+  const code = document.getElementById('auth-confirmation-code').value.trim();
+  if (!code) {
+    showToast('Enter confirmation code');
+    return;
+  }
+  try {
+    await window.CognitoAuth.confirmSignUp(email, code);
+    await window.CognitoAuth.signIn(email, password);
+    document.getElementById('auth-confirmation-step').style.display = 'none';
+    showToast('Signed in ✓');
+    updateAuthUI();
+    goTo(2); //directly to eddit profile panel after sign-in
+  } catch (err) {
+    showToast(err.message || 'Confirmation failed');
   }
 }
 
@@ -101,18 +143,21 @@ function updateAuthUI() {
   document.querySelectorAll('[data-auth="signed-out"]').forEach((el) => {
     el.style.display = signedIn ? 'none' : '';
   });
+
+  const who = document.getElementById('auth-current-user');
+  if (who) who.textContent = signedIn ? (window.CognitoAuth.currentEmail() || 'your account') : '';
 }
 updateAuthUI();
 
 // ─── Panel navigation ─────────────────────────────────────────────────────────
-// Panel order: 0 = Profile, 1 = Menu, 2 = Settings, 3 = Political Identity, 4 = Journal
+// Panel order: 0 = Profile, 1 = Menu, 2 = Settings, 3 = Political Identity, 4 = Journal, 5 = account
 const track  = document.getElementById('track');
 const dots   = document.querySelectorAll('.dot');
 const PANEL_W = 340;
 let current  = 0;
 
 function goTo(index) {
-  current = Math.max(0, Math.min(4, index));
+  current = Math.max(0, Math.min(5, index));
   track.style.transform = `translateX(${-current * PANEL_W}px)`;
   dots.forEach((d, i) => d.classList.toggle('active', i === current));
 }
@@ -180,7 +225,7 @@ function setChipValue(id, value) {
   }
 }
 
-function saveProfile() {
+async function saveProfile() {
   const title     = document.getElementById('sel-title').value;
   const ethnicity = document.getElementById('sel-ethnicity').value;
   const religion  = document.getElementById('sel-religion').value;
@@ -192,7 +237,14 @@ function saveProfile() {
   setChipValue('disp-ethnicity', ethnicity || '');
   setChipValue('disp-religion',  religion  || '');
   setChipValue('disp-city',      city      || '');
+  setChipValue('disp-email',     email     || '');
 
+  const saved = await syncToServer();
+  if(!saved) return; // SynctoServer already shows why
+
+  showToast('Profile saved ✓');
+  setTimeout(() => goTo(0), 600);
+  
   // Name / handle at the top of the profile body
   const nameEl = document.getElementById('disp-full_name');
   if (nameinput) {
@@ -219,19 +271,20 @@ function selectPolitical(el) {
   selectedPolitical = el.dataset.value;
 }
 
-function savePolitical() {
+ async function savePolitical() {
   if (!selectedPolitical) {
     showToast('Pick an option first');
     return;
   }
-  syncToServer();
+  const saved = await syncToServer();
+  if(!saved) return; // SynctoServer already shows why
 
   showToast(`Saved: ${selectedPolitical} ✓`);
   setTimeout(() => goTo(1), 600);
 }
 
 // ─── Journal (Panel 4) ────────────────────────────────────────────────────────
-function saveJournal() {
+async function saveJournal() {
   const text = document.getElementById('journal-input').value.trim();
   const meta = document.getElementById('journal-meta');
 
@@ -239,11 +292,15 @@ function saveJournal() {
     showToast('Nothing to save yet');
     return;
   }
+  
+  const saved = await syncToServer();
+  if(!saved) return; // SynctoServer already shows why
+
+  //only stamp "last saved" if the save has succeeded
 
   const now = new Date();
   meta.textContent = `Last saved ${now.toLocaleDateString()} at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-  syncToServer();
 
   showToast('Journal entry saved ✓');
 }

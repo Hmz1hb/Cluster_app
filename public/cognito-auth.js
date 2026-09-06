@@ -142,6 +142,42 @@
     return tokens ? tokens.AccessToken : null;
   }
 
+  // Returns an access token that is good to use right now, or null if the
+  // user genuinely has to sign in again.
+  //
+  // isSignedIn() only looks at the access token, which lives 60 minutes. The
+  // refresh token lives days longer, so treating an expired access token as
+  // "signed out" would log people out mid-session for no reason. Try the
+  // refresh first, and only give up if that fails too.
+  async function ensureFreshToken() {
+    const tokens = loadTokens();
+    if (!tokens) return null;
+    if (isSignedIn()) return tokens.AccessToken;
+    if (!tokens.RefreshToken) return null;
+
+    try {
+      const refreshed = await refresh();
+      return refreshed.AccessToken;
+    } catch (err) {
+      clearTokens(); // refresh token spent or revoked - a real sign-out
+      return null;
+    }
+  }
+
+  // The email this session belongs to, read out of the ID token, for display
+  // only. The server never trusts anything decoded here - it verifies the
+  // token itself on every request.
+  function currentEmail() {
+    const tokens = loadTokens();
+    if (!tokens || !tokens.IdToken) return null;
+    try {
+      const payload = tokens.IdToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(payload)).email || null;
+    } catch (err) {
+      return null;
+    }
+  }
+
   window.CognitoAuth = {
     signUp,
     confirmSignUp,
@@ -151,5 +187,7 @@
     isSignedIn,
     getIdToken,
     getAccessToken,
+    ensureFreshToken,
+    currentEmail,
   };
 })();
