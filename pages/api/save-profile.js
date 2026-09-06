@@ -33,7 +33,11 @@ import { verifyAuthHeader } from '../../lib/verifyCognitoToken';
 
 export const config = {
   api: {
-    bodyParser: { sizeLimit: '10mb' }, // photos arrive as base64, so allow a bit more room
+    // Photos arrive as base64, which adds a third to their size, and two of
+    // them travel together. app.js shrinks each to at most ~3MB before
+    // sending, so this is headroom rather than the operative limit — but at
+    // 10mb an ordinary phone photo was rejected outright with a 413.
+    bodyParser: { sizeLimit: '15mb' },
   },
 };
 

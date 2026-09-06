@@ -75,6 +75,14 @@ async function syncToServer() {
       res = await doFetch(refreshed.AccessToken);
     }
 
+    // Photos are shrunk before they get here, so this should not happen —
+    // but saying "check your connection" when the body was simply too big
+    // sends people looking in entirely the wrong place.
+    if (res.status === 413) {
+      showToast('Those photos are too large to save — try smaller ones');
+      return null;
+    }
+
     if (!res.ok) throw new Error(`Server responded ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -381,36 +389,98 @@ function showToast(msg) {
 }
 
 // ─── Photo uploads ────────────────────────────────────────────────────────────
+// Photos used to be sent exactly as picked. A phone camera produces 3-8MB per
+// shot, base64 adds a third on top, and the card sends two at once — so a
+// normal upload sailed past the API's body limit and came back 413 without a
+// byte reaching S3. Shrinking here fixes that at the source, and makes saving
+// and loading markedly faster besides.
+const MAX_COVER_DIM  = 1600;  // displayed at 340px wide; generous for retina
+const MAX_AVATAR_DIM = 800;   // displayed in a 72px circle
+const IMAGE_QUALITY  = 0.85;
+const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+
+// Decodes a picked file, scales the long edge down to `maxDim`, and returns a
+// JPEG data URL. Throws with a readable message if the browser cannot decode
+// the file at all — an iPhone HEIC on desktop Chrome, for instance.
+async function shrinkImage(file, maxDim) {
+  let source;
+  let objectUrl;
+
+  try {
+    // Honours the EXIF orientation tag, so portrait photos don't come out
+    // on their side.
+    source = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch (err) {
+    objectUrl = URL.createObjectURL(file);
+    source = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload  = () => resolve(img);
+      img.onerror = () => reject(new Error(`This browser can't read ${file.type || 'that file type'}`));
+      img.src = objectUrl;
+    });
+  }
+
+  try {
+    const scale  = Math.min(1, maxDim / Math.max(source.width, source.height));
+    const canvas = document.createElement('canvas');
+    canvas.width  = Math.round(source.width  * scale);
+    canvas.height = Math.round(source.height * scale);
+    canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+
+    // Step the quality down until it comfortably fits the request budget.
+    let quality = IMAGE_QUALITY;
+    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+    while (dataUrl.length > MAX_PHOTO_BYTES && quality > 0.4) {
+      quality -= 0.15;
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+    return dataUrl;
+  } finally {
+    if (source.close) source.close();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
+// Shared by both pickers: shrink, show, and remember for the next save.
+async function handlePhotoPick(input, { maxDim, imgId, hideId, assign }) {
+  const file = input.files[0];
+  if (!file) return;
+
+  try {
+    const dataUrl = await shrinkImage(file, maxDim);
+    assign(dataUrl);
+
+    const img = document.getElementById(imgId);
+    img.src = dataUrl;
+    img.classList.add('loaded');
+    document.getElementById(hideId).style.display = 'none';
+  } catch (err) {
+    console.warn('photo upload:', err);
+    showToast(err.message || "Couldn't read that image");
+  } finally {
+    // Let the same file be picked again after a failure.
+    input.value = '';
+  }
+}
+
 // Cover photo
 document.getElementById('cover-input').addEventListener('change', function () {
-  const file = this.files[0]; // this refers to document.getElementById('cover-input')
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img  = document.getElementById('cover-img');
-    const hint = document.getElementById('cover-hint');
-    coverDataUrl = e.target.result;
-    img.src = coverDataUrl;
-    img.classList.add('loaded');
-    hint.style.display = 'none';
-  };
-  reader.readAsDataURL(file);
+  handlePhotoPick(this, {
+    maxDim: MAX_COVER_DIM,
+    imgId:  'cover-img',
+    hideId: 'cover-hint',
+    assign: (dataUrl) => { coverDataUrl = dataUrl; },
+  });
 });
 
 // Avatar / profile photo (the blue circle icon)
 document.getElementById('avatar-input').addEventListener('change', function () {
-  const file = this.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img         = document.getElementById('avatar-img');
-    const placeholder = document.getElementById('avatar-placeholder');
-    avatarDataUrl = e.target.result;
-    img.src = avatarDataUrl;
-    img.classList.add('loaded');
-    placeholder.style.display = 'none';
-  };
-  reader.readAsDataURL(file);
+  handlePhotoPick(this, {
+    maxDim: MAX_AVATAR_DIM,
+    imgId:  'avatar-img',
+    hideId: 'avatar-placeholder',
+    assign: (dataUrl) => { avatarDataUrl = dataUrl; },
+  });
 });
 
 // ─── Profile fields — save & update card ─────────────────────────────────────
