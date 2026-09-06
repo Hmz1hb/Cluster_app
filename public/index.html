@@ -48,7 +48,7 @@
     /* ── Panel track ── */
     .track {
       display: flex;
-      width: 500%;   /* 5 panels */
+      width: 600%;   /* 6 panels */
       height: 100%;
       transition: transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -391,6 +391,49 @@
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    /* ══════════════════════════════════
+       PANEL 5 — account / sign in 
+    ══════════════════════════════════ */
+    .panel-account { background: #0d0d11; }
+    .auth-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .auth-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+    .auth-btn {
+      width: 100%;
+      padding: 13px;
+      border-radius: 14px;
+      border: none;
+      background: #00ddff;
+      color: #000;
+      font-family: 'Syne', sans-serif;
+      font-size: 14px; font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, background 0.2s, border-color 0.2s;
+    }
+    .auth-btn:hover { opacity: 0.88; }
+    .auth-btn.ghost {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #fff;
+    }
+    .auth-btn.ghost:hover { background: rgba(0,221,255,0.08); border-color: rgba(0,221,255,0.3); }
+    .auth-hint { font-size: 11px; color: rgba(255,255,255,0.3); line-height: 1.5; }
+    .auth-confirm {
+      display: flex; flex-direction: column; gap: 10px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .auth-status {
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(0,221,255,0.25);
+      background: rgba(0,221,255,0.06);
+    }
+    .auth-status-label {
+      font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+    }
+    .auth-status-email { font-size: 14px; color: #fff; margin-top: 4px; word-break: break-all; }
+
   </style>
 </head>
 <body>
@@ -478,6 +521,7 @@
         <button class="menu-item" onclick="goTo(2)">Settings</button>
         <button class="menu-item" onclick="goTo(3)">Political Identity</button>
         <button class="menu-item" onclick="goTo(4)">Journal</button>
+        <button class="menu-item" onclick="goTo(5)">Account</button>
       </div>
     </div>
 
@@ -636,11 +680,62 @@
       <button class="save-btn" onclick="saveJournal()">Save Entry</button>
     </div>
 
+    <!-- ══ PANEL 5: Account ══ -->
+    <div class="panel panel-account">
+      <button class="back-btn" onclick="goTo(1)">&#8592;</button>
+
+      <div class="panel-header">
+        <h2>Account</h2>
+        <p>Sign in so your card is saved to your profile</p>
+      </div>
+
+      <!-- Shown while signed OUT -->
+      <div class="auth-body" data-auth="signed-out">
+
+        <div class="field-group">
+          <label for="auth-email">Email</label>
+          <input type="email" id="auth-email" autocomplete="username" placeholder="you@example.com"/>
+        </div>
+
+        <div class="field-group">
+          <label for="auth-password">Password</label>
+          <input type="password" id="auth-password" autocomplete="current-password" placeholder="8+ chars, mixed case, number, symbol"/>
+        </div>
+
+        <div class="auth-actions">
+          <button class="auth-btn" onclick="signIn()">Sign In</button>
+          <button class="auth-btn ghost" onclick="signUp()">Create an account</button>
+        </div>
+
+        <!-- Appears only after Create an account, for the emailed code -->
+        <div class="auth-confirm" id="auth-confirmation-step" style="display:none">
+          <div class="field-group">
+            <label for="auth-confirmation-code">Confirmation code</label>
+            <input type="text" id="auth-confirmation-code" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code from your email"/>
+          </div>
+          <button class="auth-btn" onclick="confirmSignUp()">Confirm &amp; Sign In</button>
+        </div>
+
+        <p class="auth-hint">Your profile, photos and journal are saved to your account. Until you sign in, nothing can be stored.</p>
+      </div>
+
+      <!-- Shown while signed IN -->
+      <div class="auth-body" data-auth="signed-in">
+        <div class="auth-status">
+          <div class="auth-status-label">Signed in as</div>
+          <div class="auth-status-email" id="auth-current-user"></div>
+        </div>
+        <button class="auth-btn ghost" onclick="signOut()">Sign Out</button>
+      </div>
+
+    </div>
+
   </div>
 
   <!-- Dots -->
   <div class="dots" id="dots">
     <div class="dot active"></div>
+    <div class="dot"></div>
     <div class="dot"></div>
     <div class="dot"></div>
     <div class="dot"></div>

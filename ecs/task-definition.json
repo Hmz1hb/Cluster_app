@@ -34,11 +34,11 @@
         },
         {
           "name": "COGNITO_USER_POOL_ID",
-          "value": "us-west-1_9JyaVN2bh"
+          "value": "us-west-1_IKiKKgKrq"
         },
         {
           "name": "COGNITO_CLIENT_ID",
-          "value": "1755e0ikj26gudpt4l1v10ag7k"
+          "value": "508fa82r3ttv3bgh3gtomt1ubv"
         },
         {
           "name": "ALLOWED_ORIGIN",
