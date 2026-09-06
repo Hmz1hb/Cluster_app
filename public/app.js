@@ -68,6 +68,30 @@ async function syncToServer() {
   }
 }
 
+// Cognito's raw errors are long and internal-sounding ("Password did not
+// conform with policy: Password not long enough"), and they overflowed the
+// toast. Turn them into something a person can act on; the original is kept
+// in the console for debugging.
+function authErrorMessage(err) {
+  const code = (err && err.code) || '';
+  const msg  = (err && err.message) || '';
+  const weakPassword = 'Password needs 8+ characters, mixed case, a number and a symbol';
+
+  if (code.includes('NotAuthorizedException'))    return 'Wrong email or password';
+  if (code.includes('UserNotFoundException'))     return 'No account with that email';
+  if (code.includes('UsernameExistsException'))   return 'That email already has an account';
+  if (code.includes('UserNotConfirmedException')) return 'Confirm your email first — check your inbox';
+  if (code.includes('CodeMismatchException'))     return "That code doesn't match";
+  if (code.includes('ExpiredCodeException'))      return 'That code expired — sign up again to get a new one';
+  if (code.includes('LimitExceededException'))    return 'Too many attempts — wait a minute and try again';
+  if (code.includes('InvalidPasswordException'))  return weakPassword;
+  if (msg.includes('Password did not conform'))   return weakPassword;
+  if (code.includes('InvalidParameterException') && msg.toLowerCase().includes('email')) {
+    return 'Enter a valid email address';
+  }
+  return msg || 'Something went wrong — try again';
+}
+
 function authFields() {
   return {
     email: document.getElementById('auth-email').value.trim(),
@@ -87,7 +111,8 @@ async function signIn() {
     updateAuthUI();
     goTo(2); //directly to eddit profile panel after sign-in
   } catch (err) {
-    showToast(err.message || 'Sign-in failed');
+    console.warn('Sign-in:', err);
+    showToast(authErrorMessage(err));
   }
 }
 
@@ -103,7 +128,8 @@ async function signUp() {
     document.getElementById('auth-confirmation-step').style.display = '';
     showToast('Confirmation code sent to email');
   } catch (err) {
-    showToast(err.message || 'Sign-up failed');
+    console.warn('Sign-up:', err);
+    showToast(authErrorMessage(err));
   }
 }
 
@@ -122,12 +148,19 @@ async function confirmSignUp() {
     updateAuthUI();
     goTo(2); //directly to eddit profile panel after sign-in
   } catch (err) {
-    showToast(err.message || 'Confirmation failed');
+    console.warn('Confirmation:', err);
+    showToast(authErrorMessage(err));
   }
 }
 
 function signOut() {
+  // Grab the address before the tokens go, so signing back in is one field.
+  const email = window.CognitoAuth.currentEmail();
   window.CognitoAuth.signOut();
+
+  const field = document.getElementById('auth-email');
+  if (field && email) field.value = email;
+
   showToast('Signed out');
   updateAuthUI();
 }
@@ -144,8 +177,25 @@ function updateAuthUI() {
     el.style.display = signedIn ? 'none' : '';
   });
 
+  const email = signedIn ? window.CognitoAuth.currentEmail() : null;
+
   const who = document.getElementById('auth-current-user');
-  if (who) who.textContent = signedIn ? (window.CognitoAuth.currentEmail() || 'your account') : '';
+  if (who) who.textContent = signedIn ? (email || 'your account') : '';
+
+  // Prefill the card's email with the account it will be saved under, so
+  // nobody has to retype it. dataset.autofilled records what we put there,
+  // so a value the user typed themselves is never overwritten or cleared.
+  const field = document.getElementById('input-email');
+  if (field) {
+    const ours = !field.value || field.value === field.dataset.autofilled;
+    if (email && ours) {
+      field.value = email;
+      field.dataset.autofilled = email;
+    } else if (!email && field.value === field.dataset.autofilled) {
+      field.value = '';
+      delete field.dataset.autofilled;
+    }
+  }
 }
 updateAuthUI();
 
@@ -239,12 +289,6 @@ async function saveProfile() {
   setChipValue('disp-city',      city      || '');
   setChipValue('disp-email',     email     || '');
 
-  const saved = await syncToServer();
-  if(!saved) return; // SynctoServer already shows why
-
-  showToast('Profile saved ✓');
-  setTimeout(() => goTo(0), 600);
-  
   // Name / handle at the top of the profile body
   const nameEl = document.getElementById('disp-full_name');
   if (nameinput) {
@@ -254,9 +298,9 @@ async function saveProfile() {
     nameEl.textContent = 'Your Name';
     nameEl.classList.add('empty');
   }
-  setChipValue('disp-email', email || '');
 
-  syncToServer();
+  const saved = await syncToServer();
+  if (!saved) return; // syncToServer already shows why
 
   showToast('Profile updated ✓');
   setTimeout(() => goTo(0), 600);
@@ -292,7 +336,7 @@ async function saveJournal() {
     showToast('Nothing to save yet');
     return;
   }
-  
+
   const saved = await syncToServer();
   if(!saved) return; // SynctoServer already shows why
 
